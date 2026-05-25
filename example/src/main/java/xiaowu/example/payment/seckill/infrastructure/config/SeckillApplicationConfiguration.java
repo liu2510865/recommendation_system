@@ -4,6 +4,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import xiaowu.example.payment.application.port.DistributedLockExecutor;
 import xiaowu.example.payment.seckill.application.port.ReservationCacheGateway;
 import xiaowu.example.payment.seckill.application.port.ReservationEventPublisher;
 import xiaowu.example.payment.seckill.application.service.SeckillReservationApplicationService;
@@ -12,14 +13,16 @@ import xiaowu.example.payment.seckill.domain.repository.SeckillReservationReposi
 @Configuration(proxyBeanMethods = false)
 public class SeckillApplicationConfiguration {
   @Bean
-  @ConditionalOnBean({ ReservationCacheGateway.class, ReservationEventPublisher.class })
+  @ConditionalOnBean({ ReservationCacheGateway.class, ReservationEventPublisher.class, DistributedLockExecutor.class })
   SeckillReservationApplicationService seckillReservationApplicationService(
       SeckillReservationRepository reservationRepository,
       ReservationCacheGateway reservationCacheGateway,
-      ReservationEventPublisher reservationEventPublisher) {
+      ReservationEventPublisher reservationEventPublisher,
+      DistributedLockExecutor distributedLockExecutor) {
     return new SeckillReservationApplicationService(
         reservationRepository,
         reservationCacheGateway,
-        reservationEventPublisher);
+        reservationEventPublisher,
+        distributedLockExecutor);
   }
 }

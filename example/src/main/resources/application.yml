@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: example-learning-module
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+      timeout: 3s
   ai:
     model:
       chat: ${SPRING_AI_MODEL_CHAT:openai}

@@ -1,9 +1,11 @@
 package xiaowu.example.payment.seckill.application.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
+import xiaowu.example.common.lock.DistributedLockExecutor;
 import xiaowu.example.payment.seckill.application.port.ReservationCacheGateway;
 import xiaowu.example.payment.seckill.application.port.ReservationCacheGateway.ReleaseCacheCommand;
 import xiaowu.example.payment.seckill.application.port.ReservationCacheGateway.ReserveCacheCommand;
@@ -24,6 +26,12 @@ import xiaowu.example.payment.seckill.domain.repository.SeckillReservationReposi
 
 public class SeckillReservationApplicationService {
 
+  private static final Duration RESERVE_LOCK_WAIT_TIME = Duration.ofMillis(200);
+  private static final Duration RESERVE_LOCK_LEASE_TIME = Duration.ofSeconds(5);
+  private static final String RESERVE_LOCK_KEY_PREFIX = "lock:payment:seckill:reserve:";
+
+  private final DistributedLockExecutor distributedLockExecutor;
+
   private final SeckillReservationRepository reservationRepository;
   private final ReservationCacheGateway reservationCacheGateway;
   private final ReservationEventPublisher reservationEventPublisher;
@@ -31,19 +39,21 @@ public class SeckillReservationApplicationService {
   public SeckillReservationApplicationService(
       SeckillReservationRepository reservationRepository,
       ReservationCacheGateway reservationCacheGateway,
-      ReservationEventPublisher reservationEventPublisher) {
+      ReservationEventPublisher reservationEventPublisher,
+      DistributedLockExecutor distributedLockExecutor) {
     this.reservationRepository = Objects.requireNonNull(reservationRepository, "reservationRepository");
     this.reservationCacheGateway = Objects.requireNonNull(reservationCacheGateway, "reservationCacheGateway");
     this.reservationEventPublisher = Objects.requireNonNull(reservationEventPublisher, "reservationEventPublisher");
+    this.distributedLockExecutor = Objects.requireNonNull(distributedLockExecutor, "distributedLockExecutor");
   }
 
-  /**
-   * 处理预订请求
-   *
-   * @param command 预订命令
-   * @return 预订结果
-   */
   public ReserveResult reserve(ReserveCommand command) {
+    String lockKey = buildReserveLockKey(command);
+    return distributedLockExecutor.executeWithLock(lockKey, RESERVE_LOCK_WAIT_TIME, RESERVE_LOCK_LEASE_TIME,
+        () -> reserveWithLock(command));
+  }
+
+  private ReserveResult reserveWithLock(ReserveCommand command) {
     LocalDateTime expireAt = LocalDateTime.now().plusSeconds(command.reserveSeconds());
     String reservationId = command.reservationId() == null || command.reservationId().isBlank()
         ? "RSV_" + UUID.randomUUID()
@@ -130,6 +140,17 @@ public class SeckillReservationApplicationService {
         LocalDateTime.now()));
 
     return new ReleaseResult(reservation.getReservationId(), true, "Release event published");
+  }
+
+  private static String buildReserveLockKey(ReserveCommand command) {
+    Objects.requireNonNull(command, "command");
+    if (command.activityId() == null) {
+      throw new IllegalArgumentException("activityId must not be null");
+    }
+    if (command.skuId() == null) {
+      throw new IllegalArgumentException("skuId must not be null");
+    }
+    return RESERVE_LOCK_KEY_PREFIX + command.activityId() + ":" + command.skuId();
   }
 
   /**

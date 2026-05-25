@@ -1,10 +1,12 @@
 package xiaowu.example.supplieretl.application.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import xiaowu.example.common.lock.Redisson.RedissonDistributedLockExecutor;
 import xiaowu.example.supplieretl.application.port.PullTaskPublisher;
 import xiaowu.example.supplieretl.application.port.PullTaskPublisher.PullRequestedEvent;
 import xiaowu.example.supplieretl.domain.entity.SupplierConnection;
@@ -20,26 +22,37 @@ import xiaowu.example.supplieretl.domain.repository.SupplierConnectionRepository
  */
 public class SupplierPullSchedulingApplicationService {
 
+  private static final String SCHEDULING_LOCK_KEY = "lock:supplieretl:scheduling:pull-dispatch";
+  private static final Duration SCHEDULING_LOCK_WAIT_TIME = Duration.ofMillis(200);
+
   private final SupplierConnectionRepository supplierConnectionRepository;
   private final PullTaskPublisher pullTaskPublisher;
+  private final RedissonDistributedLockExecutor distributedLockExecutor;
 
   public SupplierPullSchedulingApplicationService(
       SupplierConnectionRepository supplierConnectionRepository,
-      PullTaskPublisher pullTaskPublisher) {
+      PullTaskPublisher pullTaskPublisher,
+      RedissonDistributedLockExecutor distributedLockExecutor) {
     this.supplierConnectionRepository = Objects.requireNonNull(
         supplierConnectionRepository,
         "supplierConnectionRepository");
     this.pullTaskPublisher = Objects.requireNonNull(pullTaskPublisher, "pullTaskPublisher");
+    this.distributedLockExecutor = Objects.requireNonNull(distributedLockExecutor, "distributedLockExecutor");
+  }
+
+  public SchedulingResult scheduleDueConnections(ScheduleCommand command) {
+    return distributedLockExecutor.executeWithWatchdogLock(SCHEDULING_LOCK_KEY, SCHEDULING_LOCK_WAIT_TIME,
+        () -> scheduleDueConnectionsWithWatchdokLock(command));
   }
 
   /**
    * 调度到期的供应商连接，尝试获取租约并发布拉取请求。
-   * 
+   *
    * @doc : 默认发布到kafkfa
    * @param command 调度命令，包含批次大小和租约秒数
    * @return 调度结果，包含扫描的连接数、成功获取租约数、成功发布任务数和发布失败的供应商ID列表
    */
-  public SchedulingResult scheduleDueConnections(ScheduleCommand command) {
+  public SchedulingResult scheduleDueConnectionsWithWatchdokLock(ScheduleCommand command) {
     Objects.requireNonNull(command, "command");
     validateCommand(command);
 
