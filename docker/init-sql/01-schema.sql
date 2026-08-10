@@ -1,3 +1,6 @@
+-- 强制本次会话使用 utf8mb4，避免中文乱码（客户端连接字符集必须为 utf8mb4）
+SET NAMES utf8mb4;
+
 -- 用户基础画像（静态属性）
 -- 冷启动基础：新用户无行为数据时，AI 依赖此表进行个性化对话
 CREATE TABLE user_profile (
