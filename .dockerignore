@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.idea
+*.iml
+
+# Build intermediate files (keep JARs)
+**/target/classes
+**/target/maven-archiver
+**/target/maven-status
+**/target/generated-sources
+**/target/test-classes
+**/target/surefire-reports
+**/target/site
+**/target/*.original
+
+# Example module (not deployed)
+example/
+
+# Docs
+docs/
+**/*.md
+
+# Docker
+docker/
+
+# Misc
+*.pdf
+*.txt
+*.tgz
+package*.json
+resume.*

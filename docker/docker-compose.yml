@@ -1,0 +1,144 @@
+# ==================== 推荐系统 Docker Compose ====================
+# 使用方式:
+#   docker compose build
+#   docker compose up -d
+#
+# 健康检查:
+#   curl http://localhost:8922/actuator/health  (在线服务)
+#   curl http://localhost:8923/actuator/health  (训练服务)
+#
+# 登录获取 JWT:
+#   curl -X POST http://localhost:8922/api/auth/login \
+#     -H "Content-Type: application/json" \
+#     -d '{"username":"admin","password":"admin123"}'
+#
+# 使用 JWT 调用接口:
+#   curl http://localhost:8922/api/recommendation/recall/1?limit=10 \
+#     -H "Authorization: Bearer <token>"
+
+services:
+  # ==================== MySQL ====================
+  mysql:
+    image: mysql:8.4
+    container_name: rec-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: recommendation
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-sql:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - rec-net
+
+  # ==================== Kafka (KRaft 模式，无需 Zookeeper) ====================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: rec-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - rec-net
+
+  # ==================== 在线服务 (backed) ====================
+  backed:
+    build:
+      context: ..
+      dockerfile: backed/Dockerfile
+    container_name: rec-backed
+    restart: unless-stopped
+    ports:
+      - "8922:8922"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: recommendation
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JPA_DDL: update
+      AUTH_USERNAME: admin
+      AUTH_PASSWORD: admin123
+      JWT_SECRET: d2VlZnJlY29tbWVuZGF0aW9uc3lzdGVtc2VjcmV0a2V5MTIzNDU2Nzg5MA==
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-placeholder}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseG1GC"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8922/actuator/health | grep -o '\"status\":\"UP\"' >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - rec-net
+
+  # ==================== 离线训练服务 (trainer) ====================
+  trainer:
+    build:
+      context: ..
+      dockerfile: recommendation-trainer/Dockerfile
+    container_name: rec-trainer
+    restart: unless-stopped
+    ports:
+      - "8923:8923"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: recommendation
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: root
+      JAVA_OPTS: "-Xms512m -Xmx2g -Xss8m -XX:+UseG1GC"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8923/actuator/health | grep -o '\"status\":\"UP\"' >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - rec-net
+
+volumes:
+  mysql-data:
+
+networks:
+  rec-net:
+    driver: bridge

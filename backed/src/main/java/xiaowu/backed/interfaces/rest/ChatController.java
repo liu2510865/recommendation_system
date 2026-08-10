@@ -1,9 +1,6 @@
 package xiaowu.backed.interfaces.rest;
 
-import java.util.List;
-
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,9 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import xiaowu.backed.application.service.ChatService;
-import xiaowu.backed.infrastructure.ai.client.OpenAiClient;
-import xiaowu.backed.infrastructure.ai.model.ChatMessage;
-import xiaowu.backed.infrastructure.ai.model.ChatRequest;
 
 /**
  * AI 对话控制器 —— 基于用户画像的个性化聊天入口
@@ -29,12 +23,6 @@ import xiaowu.backed.infrastructure.ai.model.ChatRequest;
  *        -d "帮我推荐一款手机"
  * </pre>
  *
- * <p>
- * 为什么 message 用 RequestBody 纯文本而非 JSON DTO？
- * 这是最小可用版本（MVP），目的是快速验证"画像注入 AI 对话"的效果。
- * 后续迭代再加多轮对话、会话管理、JSON 格式等功能。
- * 当前阶段，curl 能直接传文本最方便。
- *
  * @author xiaowu
  */
 @RestController
@@ -44,14 +32,9 @@ import xiaowu.backed.infrastructure.ai.model.ChatRequest;
 public class ChatController {
 
     private final ChatService chatService;
-    private final OpenAiClient openAiClient;
 
     /**
      * 发送消息给 AI，获取基于画像的个性化回复
-     *
-     * @param userId  用户 ID（URL 参数）
-     * @param message 用户消息（请求体纯文本）
-     * @return AI 回复文本
      */
     @PostMapping
     public ResponseEntity<ChatResponse> chat(
@@ -69,24 +52,10 @@ public class ChatController {
         } catch (Exception e) {
             log.error("[Chat] AI call failed: userId={}", userId, e);
             return ResponseEntity.internalServerError()
-                    .body(new ChatResponse(false, "AI 服务暂时不可用: " + e.getMessage(), null));
+                    .body(new ChatResponse(false, "AI 服务暂时不可用", null));
         }
     }
 
-    // 临时测试用，验证后删除
-    @GetMapping("/test-ai")
-    public String test() {
-        var messages = List.of(ChatMessage.user("说一句话"));
-        var request = ChatRequest.of("gpt-5", messages);
-        var response = openAiClient.chat(request);
-        return response.getMessage().content();
-    }
-
-    /**
-     * 为什么用 record 而非 Map？
-     * 类型安全、自文档化、序列化结果稳定。
-     * Map<String, Object> 无法保证字段名一致性。
-     */
     private record ChatResponse(boolean success, String message, String reply) {
     }
 }

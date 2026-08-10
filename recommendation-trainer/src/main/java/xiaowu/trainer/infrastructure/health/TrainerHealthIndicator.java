@@ -36,9 +36,9 @@ public class TrainerHealthIndicator implements HealthIndicator {
 
         // ALS 训练状态
         var status = alsTrainingService.getStatus();
-        builder.withDetail("modelName", status.modelName())
-                .withDetail("trainingState", status.state().name())
-                .withDetail("activeModelVersion", status.activeModelVersion());
+        builder.withDetail("modelName", status.modelName() != null ? status.modelName() : "unknown")
+                .withDetail("trainingState", status.state() != null ? status.state().name() : "UNKNOWN")
+                .withDetail("activeModelVersion", status.activeModelVersion() != null ? status.activeModelVersion() : "none");
 
         if (status.startedAt() != null) {
             builder.withDetail("lastTrainingStartedAt", status.startedAt().toString());

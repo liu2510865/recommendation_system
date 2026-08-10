@@ -1,5 +1,6 @@
 server:
-  port: 8922
+  port: ${SERVER_PORT:8922}
+  shutdown: graceful
 
 spring:
   application:
@@ -7,63 +8,66 @@ spring:
 
   # ========================= 数据源 =========================
   datasource:
-    url: jdbc:mysql://localhost:3306/recommendation?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:recommendation}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 10 # 连接池上限
-      minimum-idle: 5 # 最小空闲连接
-      connection-timeout: 30000 # 获取连接超时 30s
-      idle-timeout: 600000 # 空闲连接回收 10min
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:5}
+      connection-timeout: 30000
+      idle-timeout: 600000
 
   jpa:
     hibernate:
-      ddl-auto: update # 开发环境自动建表, 生产改为 none
+      ddl-auto: ${JPA_DDL:update}
     show-sql: false
-    open-in-view: false # 关闭 OSIV, 避免 Controller 层懒加载
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
 
   # ========================= Kafka =========================
   kafka:
     bootstrap-servers:
-      - localhost:9092
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     admin:
-      auto-create: true # 开发环境自动创建 Topic
+      auto-create: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all # 等所有 ISR 副本确认, 不丢数据
+      acks: all
       retries: 3
       properties:
-        enable.idempotence: true # 幂等生产者, 防止重试导致重复
+        enable.idempotence: true
         max.in.flight.requests.per.connection: 5
     consumer:
       group-id: recommendation-consumer-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: earliest # 新消费组从头消费, 不漏数据
-      enable-auto-commit: false # 关闭自动提交, 改为手动提交
+      auto-offset-reset: earliest
+      enable-auto-commit: false
       properties:
-        max.poll.records: 500 # 每次拉取上限, 控制处理时间
-        session.timeout.ms: 30000 # 心跳超时
+        max.poll.records: 500
+        session.timeout.ms: 30000
     properties:
-      compression.type: lz4 # 全局压缩, 减少网络带宽
+      compression.type: lz4
 
   # ========================= Jackson =========================
   jackson:
     serialization:
-      write-dates-as-timestamps: false # Instant 序列化为 ISO-8601 字符串
+      write-dates-as-timestamps: false
     time-zone: UTC
 
   # ========================= Spring AI =========================
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:你的OpenAI API Key}
-      base-url: ${OPENAI_BASE_URL:你的OpenAI API 地址}
+      api-key: ${OPENAI_API_KEY:placeholder}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       chat:
         options:
-          model: ${OPENAI_MODEL:gpt-5}
-          temperature: 0.7 # 适度创造性，推荐场景不需要太发散
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.7
           max-tokens: 1024
       retry:
         max-attempts: 3
@@ -89,7 +93,7 @@ spark:
     memory: 1g
   sql:
     streaming:
-      checkpointLocation: ./spark-checkpoint
+      checkpointLocation: /tmp/spark-checkpoint
 
 # ========================= 推荐系统 =========================
 recommendation:
@@ -103,8 +107,8 @@ recommendation:
   jobs:
     aggregate-preferences:
       enabled: true
-      initial-delay-ms: 60000 # 启动后1分钟开始第一次执行
-      fixed-delay-ms: 3600000 # 每小时执行一次
+      initial-delay-ms: 60000
+      fixed-delay-ms: 3600000
     cleanup-preference-delta:
       enabled: true
       cron: "0 10 3 * * *"
@@ -112,10 +116,30 @@ recommendation:
       batch-size: 5000
     time-zone: Asia/Shanghai
 
+# ========================= 安全 =========================
+security:
+  jwt:
+    secret: ${JWT_SECRET:d2VlZnJlY29tbWVuZGF0aW9uc3lzdGVtc2VjcmV0a2V5MTIzNDU2Nzg5MA==}
+    expiration-ms: 86400000
+  auth:
+    username: ${AUTH_USERNAME:admin}
+    password: ${AUTH_PASSWORD:admin123}
+
+# ========================= AI =========================
 ai:
-  # api-key: 你的api key
-  # base-url: 你的api地址
+  api-key: ${OPENAI_API_KEY:placeholder}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com}
   model: ${OPENAI_MODEL:gpt-4o-mini}
   proxy:
-    host: 127.0.0.1
-    port: 7890
+    host: ${AI_PROXY_HOST:}
+    port: ${AI_PROXY_PORT:0}
+
+# ========================= Actuator =========================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

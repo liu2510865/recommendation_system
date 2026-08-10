@@ -40,7 +40,6 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 32768);
         props.put(ProducerConfig.LINGER_MS_CONFIG, 10);
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 67108864L);
-        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 67108864L);
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG,
                 CompressionType.LZ4.name);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

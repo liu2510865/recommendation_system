@@ -1,20 +1,136 @@
+# ==================== 生产环境配置 ====================
+# 使用方式: java -jar -Dspring.profiles.active=prod recommendation-online.jar
+
+server:
+  port: ${SERVER_PORT:8922}
+  shutdown: graceful
+
 spring:
-  kafka:
-    producer:
-      acks: all #等所有ISR副本确认,不丢数据
-      retries: 3 #
-      properties:
-        enable.idempotence: true #幂等生产者,防止重试导致重复
-        max.in.flight.requests.per.connection: 5 #幂等生产者,防止重试导致重复
-    consumer:
-      auto-offset-reset: earliest #新消费组从头消费,不漏数据
-      enable-auto-commit: false #关闭自动提交,改为手动提交,防止数据丢失
-      properties:
-        max.poll.records: 500 #每次拉取上限,控制处理时间
-        session.timeout.ms: 30000 #心跳超时
-    bootstrap-servers:
-      - localhost:9092 #Broker 就算 Kafka服务器进程,企业环境是多个Broker组成集群,客户端只需要要知道几个
+  profiles: prod
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
     properties:
-      enable.idempotence: true
-      max.in.flight.requests.per.connection: 5
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS}
+    admin:
+      auto-create: false
+    producer:
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        max.poll.records: 500
+        session.timeout.ms: 30000
+    properties:
       compression.type: lz4
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.7
+          max-tokens: 1024
+      retry:
+        max-attempts: 3
+
+kafka:
+  topic:
+    user-events: user-events
+    product-ratings: product-ratings
+    recommendations: recommendations
+    default-partitions: 3
+    default-replicas: 1
+    auto-create: false
+
+spark:
+  app:
+    name: SparkRecommendationSystem
+  master: "local[*]"
+  executor:
+    memory: 2g
+  driver:
+    memory: 2g
+  sql:
+    streaming:
+      checkpointLocation: /data/spark-checkpoint
+
+recommendation:
+  top-n: 10
+  default:
+    count: 10
+  user:
+    min-ratings: 5
+  similarity:
+    threshold: 0.5
+  jobs:
+    aggregate-preferences:
+      enabled: true
+      initial-delay-ms: 60000
+      fixed-delay-ms: 3600000
+    cleanup-preference-delta:
+      enabled: true
+      cron: "0 10 3 * * *"
+      retention-days: 30
+      batch-size: 5000
+    time-zone: Asia/Shanghai
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: 86400000
+  auth:
+    username: ${AUTH_USERNAME:admin}
+    password: ${AUTH_PASSWORD}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    root: INFO
+    xiaowu: INFO
+    org.apache.spark: WARN
+    org.apache.kafka: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

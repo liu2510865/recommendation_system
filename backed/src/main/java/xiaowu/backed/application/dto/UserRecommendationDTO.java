@@ -19,7 +19,7 @@ public record UserRecommendationDTO(
     Long userId,
     Instant generatedAt,
     Instant windowStart,
-    Instant windowsEnd,
+    Instant windowEnd,
     List<RecommendedItemDTO> items) {
 
 }

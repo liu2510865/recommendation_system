@@ -22,7 +22,7 @@ public class UserBehaviorAggregate {
 
     private UserBehaviorAggregate(Long userId, List<BehaviorEvent> behaviorEvent) {
         this.userId = Objects.requireNonNull(userId, "用户ID不能为空");
-        this.behaviorEvents = new ArrayList<>();
+        this.behaviorEvents = behaviorEvent != null ? new ArrayList<>(behaviorEvent) : new ArrayList<>();
         this.lastUpdated = Instant.now();
     }
 

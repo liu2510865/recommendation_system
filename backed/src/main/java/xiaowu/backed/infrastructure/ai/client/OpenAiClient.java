@@ -27,8 +27,8 @@ public class OpenAiClient {
 
   public OpenAiClient(
       ObjectMapper objectMapper,
-      @Value("${ai.api-key}") String apiKey,
-      @Value("${ai.base-url}") String baseUrl,
+      @Value("${ai.api-key:${OPENAI_API_KEY:placeholder}}") String apiKey,
+      @Value("${ai.base-url:${OPENAI_BASE_URL:https://api.openai.com}}") String baseUrl,
       @Value("${ai.proxy.host:}") String proxyHost,
       @Value("${ai.proxy.port:0}") int proxyPort) {
     this.objectMapper = objectMapper;
